@@ -1,0 +1,5 @@
+<?php
+
+$PHP_CLI = '/usr/local/bin/php';
+
+// ■ end of file

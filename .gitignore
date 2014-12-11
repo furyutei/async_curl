@@ -1,0 +1,4 @@
+*.log
+*.bin
+trash/*
+async_curl_options.php

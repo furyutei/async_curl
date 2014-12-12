@@ -1,12 +1,12 @@
 AsyncCurl
 =========
 非同期ダウンロード用 cURL(PHP) wrapper  
-　License: The MIT license  
-　Copyright (c) 2014 風柳(furyu)  
+- License: The MIT license  
+- Copyright (c) 2014 風柳(furyu)  
 
 概要
 ----
-データをダウンロードしつつ逐次処理を行うための PHP 用 cURL wrapper。  
+データをダウンロードしつつ逐次処理を行うための [PHP 用 cURL](http://php.net/manual/ja/ref.curl.php) wrapper。  
 
 
 使い方
@@ -51,4 +51,9 @@ $curl_result = $async_curl->get_curl_result();
 var_dump($curl_result);
 ?>
 ```
-※ 使い方については、test/test_async_curl.php も参照。  
+※ 使い方については、[test/test_async_curl.php](https://github.com/furyutei/async_curl/blob/master/test/test_async_curl.php) も参照。  
+
+
+関連記事
+--------
+- [ダウンロードしつつ逐次処理できるcURL wrapperを試作 - 風柳メモ](http://d.hatena.ne.jp/furyu-tei/20141213/1418397266)

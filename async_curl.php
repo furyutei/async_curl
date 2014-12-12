@@ -5,7 +5,7 @@
     @author     furyu (furyutei@gmail.com)
     @copyright  Copyright (c) 2014 furyu
     @link       https://github.com/furyutei/async_curl
-    @version    0.0.1.1
+    @version    0.0.1.2
     @license    The MIT license
 ******************************************************************************/
 
@@ -273,19 +273,16 @@ class AsyncCurl {
     
     //{=== PUBLIC FUNCTIONS
     
-    public  function    __construct($url=NULL, $curl_options=NULL, $debug=NULL, $child=FALSE) {
+    public  function    __construct($url=NULL, $curl_options=NULL, &$contents_pointer=NULL, $debug=NULL, $child=FALSE) {
         $this->LENGTH_SIZE = strlen(sprintf("%x", PHP_INT_MAX));
         if ($debug === NULL) $debug = self::DEFAULT_DEBUG;
         
-        for (;;) {
-            if ($child) {
-                $this->start_child($debug);
-                break;
-            }
-            if ($url) $this->init($url, $curl_options, $debug);
-            break;
+        if ($child) {
+            $this->start_child($debug);
         }
-        
+        else {
+            if ($url) $contents_pointer = $this->init($url, $curl_options, $debug);
+        }
     }   //  end of __construct()
     
     public  function    __destruct() {
@@ -346,7 +343,7 @@ class AsyncCurl {
         if (!$result) $this->close_all_fd();
         $this->log('=> ' . (($result === FALSE) ? 'ERROR' : 'OK'));
         
-        return $result;
+        return $this->get_contents_pointer();
     }   //  end of init()
     
     public  function    get_contents_pointer() {
@@ -394,7 +391,7 @@ class AsyncCurl {
 }   //  end of class AsyncCurl()
 
 
-if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) new AsyncCurl(NULL, NULL, !!(isset($argv[1]) && $argv[1] == '1'), TRUE);
+if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) new AsyncCurl(NULL, NULL, $contents_pointer, !!(isset($argv[1]) && $argv[1] == '1'), TRUE);
 
 
 // ■ end of file

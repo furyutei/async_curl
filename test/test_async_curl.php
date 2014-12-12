@@ -61,15 +61,16 @@ echo "[GET (streaming)]  {$final_url}\n";
 $curl_options[CURLOPT_NOBODY] = FALSE;
 $curl_options[CURLOPT_HEADER] = FALSE;
 
-$async_curl->init($final_url, $curl_options, $debug);
-$fp_contents_pointer = $async_curl->get_contents_pointer();
+//$async_curl->init($final_url, $curl_options, $debug);
+//$contents_pointer = $async_curl->get_contents_pointer();
+$contents_pointer = $async_curl->init($final_url, $curl_options, $debug);
 
 $fp = fopen($output_filename, 'wb');
 
 $total_size = 0;
 $max_fragment_size = 0;
-while (!feof($fp_contents_pointer)) {
-    $fragment = fread($fp_contents_pointer, $buffer_size);
+while (!feof($contents_pointer)) {
+    $fragment = fread($contents_pointer, $buffer_size);
     if ($fragment === FALSE) {
         echo "*** Error: fread()\n";
         break;

@@ -16,11 +16,17 @@ $async_curl = new AsyncCurl();
 echo "[HEAD] {$url}\n";
 $curl_options = array(
     CURLOPT_NOBODY => TRUE, // HTTP HEAD Request
+    CURLOPT_HEADER => TRUE, // OUTPUT HEADER
 );
 
 $async_curl->init($url, $curl_options, $debug);
+
+$header = $async_curl->get_contents();
+echo("<HTTP RESPONSE HEADER(S)>\n");
+echo "{$header}\n";
+
 $curl_result = $async_curl->get_curl_result();
-echo("Result:\n");
+echo("<Result>\n");
 var_dump($curl_result);
 
 $final_url = (isset($curl_result['info']['url'])) ? $curl_result['info']['url'] : $url;
@@ -32,6 +38,7 @@ echo str_repeat('=', 80) . "\n";
 if ($content_length <= $lump_threshold) {
     echo "[GET (lump)] {$final_url}\n";
     $curl_options[CURLOPT_NOBODY] = FALSE;
+    $curl_options[CURLOPT_HEADER] = FALSE;
     
     $async_curl->init($final_url, $curl_options, $debug);
     
@@ -40,7 +47,7 @@ if ($content_length <= $lump_threshold) {
     echo "Size:{$total_size}\n";
     
     $curl_result = $async_curl->get_curl_result();
-    echo("Result:\n");
+    echo("<Result>\n");
     var_dump($curl_result);
     
     $final_url = (isset($curl_result['info']['url'])) ? $curl_result['info']['url'] : $url;
@@ -52,6 +59,7 @@ if ($content_length <= $lump_threshold) {
 
 echo "[GET (streaming)]  {$final_url}\n";
 $curl_options[CURLOPT_NOBODY] = FALSE;
+$curl_options[CURLOPT_HEADER] = FALSE;
 
 $async_curl->init($final_url, $curl_options, $debug);
 $fp_contents_pointer = $async_curl->get_contents_pointer();
@@ -80,7 +88,7 @@ fclose($fp);
 
 echo "\n";
 $curl_result = $async_curl->get_curl_result();
-echo("Result:\n");
+echo("<Result>\n");
 var_dump($curl_result);
 
 $final_url = (isset($curl_result['info']['url'])) ? $curl_result['info']['url'] : $url;

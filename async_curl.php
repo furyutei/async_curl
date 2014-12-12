@@ -5,7 +5,7 @@
     @author     furyu (furyutei@gmail.com)
     @copyright  Copyright (c) 2014 furyu
     @link       https://github.com/furyutei/async_curl
-    @version    0.0.1.0
+    @version    0.0.1.1
     @license    The MIT license
 ******************************************************************************/
 
@@ -197,28 +197,28 @@ class AsyncCurl {
         
         $this->buffer_size = self::DEFAULT_BUFFER_SIZE;
         
-        $is_end = FALSE;
-        while (!$is_end) {
+        for (;;) {
             if (!$this->fp_result) {
                 $this->fp_result = fopen('php://fd/' . self::RESULT_FILENO, 'wb');
                 if (!$this->fp_result) {
                     $this->log('Error: fopen(php:://fd/' . self::RESULT_FILENO . ')');
-                    $is_end = TRUE;
                     break;
                 }
                 $this->fp_stdin = STDIN;
                 $this->fp_stdout = STDOUT;
-                $this->fp_stderr = STDERR;
+                //$this->fp_stderr = STDERR;
+                fclose(STDERR); $this->fp_stderr = NULL; // disused
             }
             if (!$this->read_value($this->fp_stdin, $type, $init_parameters)) {
                 $this->log("Error: read_value(fp_stdin)");
-                $is_end = TRUE;
                 break;
             }
             $this->log(sprintf("TYPE: 0x%0{$this->TYPE_SIZE}x", $type));
             $this->log('PARAMETERS:');
             $this->log($init_parameters);
             
+            $is_end = FALSE;
+            $curl_pointer = NULL;
             switch ($type) {
                 case    self::TYPE_INIT :
                     $curl_pointer = curl_init($init_parameters['url']);
@@ -255,11 +255,14 @@ class AsyncCurl {
                         $is_end = TRUE;
                         break;
                     }
+                    // TODO: would like to tell parent about transmission completion ...
                     break;
                 case    self::TYPE_END  :
                     $is_end = TRUE;
                     break;
             }
+            if ($curl_pointer) curl_close($curl_pointer);
+            if ($is_end) break;
         }
         $this->close_all_fd();
         
@@ -309,7 +312,7 @@ class AsyncCurl {
                     self::RESULT_FILENO => array('pipe', 'w'), // result: child will write to
                 );
                 
-                $command = sprintf('%s "%s" "%d"', $PHP_CLI, __FILE__, ($debug) ? 1 : 0);
+                $command = sprintf('%s "%s" "%d" 2>&1', $PHP_CLI, __FILE__, ($debug) ? 1 : 0);
                 
                 $this->process = proc_open($command, $descriptorspec, $pipes);
                 if (!$this->process) {
@@ -318,7 +321,8 @@ class AsyncCurl {
                 }
                 $this->fp_stdin = $pipes[0];
                 $this->fp_stdout = $pipes[1];
-                $this->fp_stderr = $pipes[2];
+                //$this->fp_stderr = $pipes[2];
+                fclose($pipes[2]); $this->fp_stderr = NULL; // disused
                 $this->fp_result = $pipes[self::RESULT_FILENO];
             }
             if (!is_array($curl_options)) $curl_options = array();
@@ -351,12 +355,6 @@ class AsyncCurl {
         return $this->fp_stdout;
     }   //  end of get_contents_pointer()
     
-    public  function    get_error_text_pointer() {
-        $this->log('*** get_error_text_pointer() ***');
-        $this->log($this->fp_stderr);
-        return $this->fp_stderr;
-    }   //  end of get_contents_pointer()
-    
     public  function    get_contents() {
         $contents = FALSE;
         $this->log('*** get_contents() ***');
@@ -374,22 +372,6 @@ class AsyncCurl {
         $this->log('=> ' . (($contents === FALSE) ? 'ERROR' : 'OK'));
         return $contents;
     }   //  end of get_contents()
-    
-    public  function    get_error_text() {
-        $error_text = FALSE;
-        $this->log('*** get_error_text() ***');
-        for (;;) {
-            if (!$this->fp_stderr) break;
-            $result = $this->read_stream($this->fp_stderr, $error_text);
-            if (!$result) {
-                $error_text = FALSE;
-                break;
-            }
-            break;
-        }
-        $this->log('=> ' . (($error_text === FALSE) ? 'ERROR' : 'OK'));
-        return $error_text;
-    }   //  end of get_error_text()
     
     public  function    get_curl_result() {
         $curl_result = FALSE;

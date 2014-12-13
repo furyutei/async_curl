@@ -5,7 +5,7 @@
     @author     furyu (furyutei@gmail.com)
     @copyright  Copyright (c) 2014 furyu
     @link       https://github.com/furyutei/async_curl
-    @version    0.0.1.2
+    @version    0.0.1.3
     @license    The MIT license
 ******************************************************************************/
 
@@ -43,7 +43,7 @@ class AsyncCurl {
     private static $FORCE_CURL_OPTIONS = array(
         CURLOPT_RETURNTRANSFER => FALSE,
         CURLOPT_FILE => STDOUT,
-        CURLOPT_STDERR => STDERR,
+        CURLOPT_STDERR => STDOUT,
     );
     
     //} end of CONSTANTS and STATIC VARIABLES
@@ -76,6 +76,12 @@ class AsyncCurl {
         $write_string = is_string($text) ? $text : print_r($text, TRUE);
         fwrite($this->fp_log, date("Y-m-d H:i:s") . " {$write_string}\n");
     }   //  end of log()
+    
+    private function    array_update($array1, $array2) {
+        if (function_exists('array_replace')) return array_replace($array1, $array2);
+        foreach ($array2 as $key => $value) $array1[$key] = $value;
+        return $array1;
+    }   //  end of array_update()
     
     private function    encode_number($number, $size) {
         $number_string = sprintf("%0{$size}x", $number);
@@ -191,7 +197,19 @@ class AsyncCurl {
         }
     }   //  end of close_all_fd()
     
-    private  function    start_child($debug=NULL) {
+    private function    check_open_fd() {
+        $result = FALSE;
+        for (;;) {
+            $fp = fopen('php://fd/1', 'wb');
+            if (!$fp) break;
+            fclose($fp);
+            $result = TRUE;
+            break;
+        }
+        return $result;
+    }   //  end of check_open_fd()
+    
+    private function    start_child($debug=NULL) {
         if ($debug) $this->fp_log = fopen(self::CHILD_LOGNAME, 'ab+');
         $this->log('*** start_child() ***');
         
@@ -199,15 +217,17 @@ class AsyncCurl {
         
         for (;;) {
             if (!$this->fp_result) {
-                $this->fp_result = fopen('php://fd/' . self::RESULT_FILENO, 'wb');
+                $ready_to_open_fd = $this->check_open_fd();
+                $this->fp_result = ($ready_to_open_fd) ? fopen('php://fd/' . self::RESULT_FILENO, 'wb') : STDERR;
                 if (!$this->fp_result) {
-                    $this->log('Error: fopen(php:://fd/' . self::RESULT_FILENO . ')');
+                    $this->log('Error: fopen(php://fd/' . self::RESULT_FILENO . ')');
                     break;
                 }
                 $this->fp_stdin = STDIN;
                 $this->fp_stdout = STDOUT;
                 //$this->fp_stderr = STDERR;
-                fclose(STDERR); $this->fp_stderr = NULL; // disused
+                if ($ready_to_open_fd) fclose(STDERR);
+                $this->fp_stderr = NULL; // disused
             }
             if (!$this->read_value($this->fp_stdin, $type, $init_parameters)) {
                 $this->log("Error: read_value(fp_stdin)");
@@ -228,8 +248,8 @@ class AsyncCurl {
                         break;
                     }
                     $curl_options_to_set = self::$DEFAULT_CURL_OPTIONS;
-                    $curl_options_to_set = array_replace($curl_options_to_set, $init_parameters['curl_options']);
-                    $curl_options_to_set = array_replace($curl_options_to_set, self::$FORCE_CURL_OPTIONS);
+                    $curl_options_to_set = $this->array_update($curl_options_to_set, $init_parameters['curl_options']);
+                    $curl_options_to_set = $this->array_update($curl_options_to_set, self::$FORCE_CURL_OPTIONS);
                     
                     $this->log('cURL OPTIONS:');
                     $this->log($curl_options_to_set);
@@ -308,8 +328,8 @@ class AsyncCurl {
                     2 => array('pipe', 'w'), // stderr: child will write to
                     self::RESULT_FILENO => array('pipe', 'w'), // result: child will write to
                 );
-                
-                $command = sprintf('%s "%s" "%d" 2>&1', $PHP_CLI, __FILE__, ($debug) ? 1 : 0);
+                $ready_to_open_fd = $this->check_open_fd();
+                $command = sprintf('%s "%s" "%d"' . (($ready_to_open_fd) ? '2>&1' : ''), $PHP_CLI, __FILE__, ($debug) ? 1 : 0);
                 
                 $this->process = proc_open($command, $descriptorspec, $pipes);
                 if (!$this->process) {
@@ -319,8 +339,9 @@ class AsyncCurl {
                 $this->fp_stdin = $pipes[0];
                 $this->fp_stdout = $pipes[1];
                 //$this->fp_stderr = $pipes[2];
-                fclose($pipes[2]); $this->fp_stderr = NULL; // disused
-                $this->fp_result = $pipes[self::RESULT_FILENO];
+                if ($ready_to_open_fd) fclose($pipes[2]);
+                $this->fp_stderr = NULL; // disused
+                $this->fp_result = ($ready_to_open_fd) ? $pipes[self::RESULT_FILENO] : $pipes[2];
             }
             if (!is_array($curl_options)) $curl_options = array();
             $this->buffer_size = isset($curl_options['CURLOPT_BUFFERSIZE']) ? $curl_options['CURLOPT_BUFFERSIZE'] : self::DEFAULT_BUFFER_SIZE;

@@ -40,6 +40,10 @@ $total_size = 0;
 $fp = fopen('test.bin', 'w');
 while (!feof($contents_pointer)) {
     $fragment = fread($contents_pointer, $max_fragment_size);
+    if ($fragment === FALSE) {
+        echo("Error: fread()\n");
+        break;
+    }
     $size = strlen($fragment);
     fwrite($fp, $fragment, $size);
     $total_size += $size;

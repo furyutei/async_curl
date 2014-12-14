@@ -5,7 +5,7 @@
     @author     furyu (furyutei@gmail.com)
     @copyright  Copyright (c) 2014 furyu
     @link       https://github.com/furyutei/async_curl
-    @version    0.0.1.3
+    @version    0.0.1.4
     @license    The MIT license
 ******************************************************************************/
 
@@ -21,6 +21,7 @@ class AsyncCurl {
     const RESULT_FILENO = 3;
     const DEFAULT_BUFFER_SIZE = 64000;
     const REUSE_CHILD = FALSE; // TODO: support reuse of child process
+    const USE_FD_STREAM = FALSE; // TODO: support automatic detection whether or not 'php://fd/x' is valid stream
     
     // message type (parent => child)
     const TYPE_INIT   = 0x0001;
@@ -200,7 +201,8 @@ class AsyncCurl {
     private function    check_open_fd() {
         $result = FALSE;
         for (;;) {
-            $fp = fopen('php://fd/1', 'wb');
+            if (!self::USE_FD_STREAM) break;
+            $fp = @fopen('php://fd/1', 'wb');
             if (!$fp) break;
             fclose($fp);
             $result = TRUE;
@@ -210,7 +212,7 @@ class AsyncCurl {
     }   //  end of check_open_fd()
     
     private function    start_child($debug=NULL) {
-        if ($debug) $this->fp_log = fopen(self::CHILD_LOGNAME, 'ab+');
+        if ($debug) $this->fp_log = @fopen(self::CHILD_LOGNAME, 'ab+');
         $this->log('*** start_child() ***');
         
         $this->buffer_size = self::DEFAULT_BUFFER_SIZE;
@@ -218,7 +220,7 @@ class AsyncCurl {
         for (;;) {
             if (!$this->fp_result) {
                 $ready_to_open_fd = $this->check_open_fd();
-                $this->fp_result = ($ready_to_open_fd) ? fopen('php://fd/' . self::RESULT_FILENO, 'wb') : STDERR;
+                $this->fp_result = ($ready_to_open_fd) ? @fopen('php://fd/' . self::RESULT_FILENO, 'wb') : STDERR;
                 if (!$this->fp_result) {
                     $this->log('Error: fopen(php://fd/' . self::RESULT_FILENO . ')');
                     break;
@@ -226,10 +228,10 @@ class AsyncCurl {
                 $this->fp_stdin = STDIN;
                 $this->fp_stdout = STDOUT;
                 //$this->fp_stderr = STDERR;
-                if ($ready_to_open_fd) fclose(STDERR);
+                if ($ready_to_open_fd) @fclose(STDERR);
                 $this->fp_stderr = NULL; // disused
             }
-            if (!$this->read_value($this->fp_stdin, $type, $init_parameters)) {
+            if (!@$this->read_value($this->fp_stdin, $type, $init_parameters)) {
                 $this->log("Error: read_value(fp_stdin)");
                 break;
             }
@@ -241,7 +243,7 @@ class AsyncCurl {
             $curl_pointer = NULL;
             switch ($type) {
                 case    self::TYPE_INIT :
-                    $curl_pointer = curl_init($init_parameters['url']);
+                    $curl_pointer = @curl_init($init_parameters['url']);
                     if ($curl_pointer === FALSE) {
                         $this->log("Error: curl_init()");
                         $is_end = TRUE;
@@ -254,17 +256,17 @@ class AsyncCurl {
                     $this->log('cURL OPTIONS:');
                     $this->log($curl_options_to_set);
                     
-                    curl_setopt_array($curl_pointer, $curl_options_to_set);
+                    @curl_setopt_array($curl_pointer, $curl_options_to_set);
                     
-                    if (curl_exec($curl_pointer) === FALSE) {
+                    if (@curl_exec($curl_pointer) === FALSE) {
                         $this->log("Error: curl_exec()");
                         $is_end = TRUE;
                         break;
                     }
                     $curl_result = array(
-                        'info' => curl_getinfo($curl_pointer),
-                        'errno' => curl_errno($curl_pointer),
-                        'error' => curl_error($curl_pointer),
+                        'info' => @curl_getinfo($curl_pointer),
+                        'errno' => @curl_errno($curl_pointer),
+                        'error' => @curl_error($curl_pointer),
                     );
                     if (!$this->write_value($this->fp_result, self::TYPE_RESULT, $curl_result)) {
                         $this->log(sprintf("Error: write_value(TYPE_RESULT(0x%0{$this->TYPE_SIZE}x))", self::TYPE_RESULT));
@@ -281,10 +283,10 @@ class AsyncCurl {
                     $is_end = TRUE;
                     break;
             }
-            if ($curl_pointer) curl_close($curl_pointer);
+            if ($curl_pointer) @curl_close($curl_pointer);
             if ($is_end) break;
         }
-        $this->close_all_fd();
+        @$this->close_all_fd();
         
     }   //  end of start_child()
     

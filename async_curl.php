@@ -5,7 +5,7 @@
     @author     furyu (furyutei@gmail.com)
     @copyright  Copyright (c) 2014 furyu
     @link       https://github.com/furyutei/async_curl
-    @version    0.0.1.4
+    @version    0.0.1.5
     @license    The MIT license
 ******************************************************************************/
 
@@ -21,7 +21,7 @@ class AsyncCurl {
     const RESULT_FILENO = 3;
     const DEFAULT_BUFFER_SIZE = 64000;
     const REUSE_CHILD = FALSE; // TODO: support reuse of child process
-    const USE_FD_STREAM = FALSE; // TODO: support automatic detection whether or not 'php://fd/x' is valid stream
+    const USE_FD_STREAM = TRUE;
     
     // message type (parent => child)
     const TYPE_INIT   = 0x0001;
@@ -54,8 +54,10 @@ class AsyncCurl {
     
     private $TYPE_SIZE = 4;
     private $LENGTH_SIZE = 8;
+    private $PHP_CLI = NULL;
     
     private $debug = FALSE;
+    private $is_child = FALSE;
     
     private $process = NULL;
     private $fp_stdin = NULL;
@@ -198,16 +200,34 @@ class AsyncCurl {
         }
     }   //  end of close_all_fd()
     
+    private function    get_php_client_path() {
+        if ($this->PHP_CLI) return $this->PHP_CLI;
+        $PHP_CLI = '/usr/bin/php';
+        $OPT_FILE = dirname(__FILE__) . '/async_curl_options.php';
+        if (is_file($OPT_FILE)) require($OPT_FILE);
+        $this->PHP_CLI = $PHP_CLI;
+        return $PHP_CLI;
+    }   //  end of get_php_client_path()
+    
     private function    check_open_fd() {
         $result = FALSE;
         for (;;) {
             if (!self::USE_FD_STREAM) break;
-            $fp = @fopen('php://fd/1', 'wb');
-            if (!$fp) break;
-            fclose($fp);
+            if ($this->is_child) {
+                $fp = @fopen('php://fd/1', 'wb');
+                if (!$fp) break;
+                fclose($fp);
+            }
+            else {
+                $php_cli = $this->get_php_client_path();
+                $command = sprintf('%s "%s" "0" "1" 2>&1', $php_cli, __FILE__);
+                exec($command, $output, $return_var);
+                if ($return_var !== 0) break;
+            }
             $result = TRUE;
             break;
         }
+        $this->log('check_open_fd(): ' . ($result?'TRUE':'FALSE'));
         return $result;
     }   //  end of check_open_fd()
     
@@ -295,12 +315,20 @@ class AsyncCurl {
     
     //{=== PUBLIC FUNCTIONS
     
-    public  function    __construct($url=NULL, $curl_options=NULL, &$contents_pointer=NULL, $debug=NULL, $child=FALSE) {
+    public  function    __construct($url=NULL, $curl_options=NULL, &$contents_pointer=NULL, $debug=NULL, $is_child=FALSE, $check_only=FALSE) {
         $this->LENGTH_SIZE = strlen(sprintf("%x", PHP_INT_MAX));
         if ($debug === NULL) $debug = self::DEFAULT_DEBUG;
         
-        if ($child) {
-            $this->start_child($debug);
+        $this->is_child = $is_child;
+        if ($is_child) {
+            if ($check_only) {
+                $ready_to_open_fd = $this->check_open_fd();
+                echo ($ready_to_open_fd ? 'OK' : 'NG') . "\n";
+                exit($ready_to_open_fd ? 0 : 1);
+            }
+            else {
+                $this->start_child($debug);
+            }
         }
         else {
             if ($url) $contents_pointer = $this->init($url, $curl_options, $debug);
@@ -312,9 +340,7 @@ class AsyncCurl {
     }   //  end of __destruct()
     
     public  function    init($url, $curl_options=NULL, $debug=NULL) {
-        $PHP_CLI = '/usr/bin/php';
-        $OPT_FILE = dirname(__FILE__) . '/async_curl_options.php';
-        if (is_file($OPT_FILE)) require($OPT_FILE);
+        $php_cli = $this->get_php_client_path();
         
         if ($debug) $this->fp_log = fopen(self::PARENT_LOGNAME, 'ab+');
         $this->log('*** init() ***');
@@ -331,8 +357,7 @@ class AsyncCurl {
                     self::RESULT_FILENO => array('pipe', 'w'), // result: child will write to
                 );
                 $ready_to_open_fd = $this->check_open_fd();
-                $command = sprintf('%s "%s" "%d"' . (($ready_to_open_fd) ? '2>&1' : ''), $PHP_CLI, __FILE__, ($debug) ? 1 : 0);
-                
+                $command = sprintf('%s "%s" "%d" ' . (($ready_to_open_fd) ? '2>&1' : ''), $php_cli, __FILE__, ($debug) ? 1 : 0);
                 $this->process = proc_open($command, $descriptorspec, $pipes);
                 if (!$this->process) {
                     $this->log("Error: proc_open({$command})");
@@ -414,7 +439,7 @@ class AsyncCurl {
 }   //  end of class AsyncCurl()
 
 
-if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) new AsyncCurl(NULL, NULL, $contents_pointer, !!(isset($argv[1]) && $argv[1] == '1'), TRUE);
+if (basename($_SERVER['PHP_SELF']) === basename(__FILE__)) new AsyncCurl(NULL, NULL, $contents_pointer, (isset($argv[1]) && $argv[1] == '1'), TRUE, (isset($argv[2]) && $argv[2] == '1'));
 
 
 // ■ end of file

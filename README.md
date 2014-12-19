@@ -1,8 +1,9 @@
 AsyncCurl
 =========
-非同期ダウンロード用 cURL(PHP) wrapper  
-- License: The MIT license  
+逐次処理用 cURL(PHP) wrapper  
 - Copyright (c) 2014 風柳(furyu)  
+- License: The MIT license  
+
 
 概要
 ----
